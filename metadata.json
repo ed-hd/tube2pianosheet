@@ -1,0 +1,5 @@
+{
+  "name": "Tube2Score - YouTube to Piano Sheet Music",
+  "description": "An advanced application that converts YouTube audio into professional piano sheet music using AI-driven harmonic analysis and VexFlow rendering.",
+  "requestFramePermissions": []
+}
