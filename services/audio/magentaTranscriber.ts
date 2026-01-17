@@ -11,6 +11,8 @@ import {
   DYNAMICS,
   KEY_SIGNATURES
 } from '../../constants/audio';
+import { extractChromagram } from './chromagram';
+import { detectKey } from './keyDetection';
 
 const MAGENTA_CHECKPOINT_URL = 'https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni';
 
@@ -109,42 +111,59 @@ function estimateBPM(notes: mm.NoteSequence.INote[]): number {
   return Math.max(60, Math.min(180, bpm));
 }
 
-function detectKeySignature(notes: mm.NoteSequence.INote[]): string {
-  const noteCount: number[] = new Array(12).fill(0);
+// Legacy key detection (preserved for reference)
+// function detectKeySignature(notes: mm.NoteSequence.INote[]): string {
+//   const noteCount: number[] = new Array(12).fill(0);
+//
+//   notes.forEach(note => {
+//     const noteIndex = (note.pitch || 0) % 12;
+//     const duration = (note.endTime || 0) - (note.startTime || 0);
+//     noteCount[noteIndex] += duration;
+//   });
+//
+//   const majorProfile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+//
+//   let bestKey = 'C';
+//   let bestCorrelation = -Infinity;
+//
+//   const keys = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb', 'Ab'];
+//   const keyOffsets: Record<string, number> = {
+//     'C': 0, 'G': 7, 'D': 2, 'A': 9, 'E': 4, 'B': 11,
+//     'F': 5, 'Bb': 10, 'Eb': 3, 'Ab': 8
+//   };
+//
+//   for (const key of keys) {
+//     const offset = keyOffsets[key];
+//     let correlation = 0;
+//
+//     for (let i = 0; i < 12; i++) {
+//       const rotatedIndex = (i - offset + 12) % 12;
+//       correlation += noteCount[i] * majorProfile[rotatedIndex];
+//     }
+//
+//     if (correlation > bestCorrelation) {
+//       bestCorrelation = correlation;
+//       bestKey = key;
+//     }
+//   }
+//
+//   return bestKey;
+// }
 
-  notes.forEach(note => {
-    const noteIndex = (note.pitch || 0) % 12;
-    const duration = (note.endTime || 0) - (note.startTime || 0);
-    noteCount[noteIndex] += duration;
-  });
-
-  const majorProfile = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
-
-  let bestKey = 'C';
-  let bestCorrelation = -Infinity;
-
-  const keys = ['C', 'G', 'D', 'A', 'E', 'B', 'F', 'Bb', 'Eb', 'Ab'];
-  const keyOffsets: Record<string, number> = {
-    'C': 0, 'G': 7, 'D': 2, 'A': 9, 'E': 4, 'B': 11,
-    'F': 5, 'Bb': 10, 'Eb': 3, 'Ab': 8
-  };
-
-  for (const key of keys) {
-    const offset = keyOffsets[key];
-    let correlation = 0;
-
-    for (let i = 0; i < 12; i++) {
-      const rotatedIndex = (i - offset + 12) % 12;
-      correlation += noteCount[i] * majorProfile[rotatedIndex];
-    }
-
-    if (correlation > bestCorrelation) {
-      bestCorrelation = correlation;
-      bestKey = key;
-    }
+/**
+ * Detect key signature from audio buffer using chromagram-based analysis
+ * @param audioBuffer - The decoded audio buffer
+ * @returns Key signature string (e.g., "C", "Eb minor")
+ */
+function detectKeySignatureFromAudio(audioBuffer: AudioBuffer): string {
+  const chromagram = extractChromagram(audioBuffer);
+  const keyResult = detectKey(chromagram);
+  
+  // Format key signature for display
+  if (keyResult.mode === 'minor') {
+    return `${keyResult.key} minor`;
   }
-
-  return bestKey;
+  return keyResult.key;
 }
 
 interface QuantizedNote {
@@ -445,7 +464,7 @@ export async function transcribeAudioWithMagenta(
   onProgress?.(80, 'Detecting tempo and key...');
 
   const bpm = estimateBPM(notes);
-  const keySignature = detectKeySignature(notes);
+  const keySignature = detectKeySignatureFromAudio(audioBuffer);
 
   onProgress?.(90, 'Generating sheet music...');
 
