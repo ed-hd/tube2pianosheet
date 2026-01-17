@@ -1,5 +1,8 @@
+// Use Magenta Onsets and Frames for high-quality polyphonic transcription
+export { transcribeAudioWithMagenta as transcribeAudio } from './audio/magentaTranscriber';
+
+// Legacy exports (kept for compatibility)
 export { 
-  transcribeAudio, 
   decodeAudioFile, 
   analyzeAudio,
   detectBPM,

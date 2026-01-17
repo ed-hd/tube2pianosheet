@@ -156,3 +156,63 @@ model.dispose();
   "@tensorflow/tfjs": "^2.7.0"
 }
 ```
+
+# Legacy Code Migration Learnings
+
+## Task 0.5: Basic Pitch Code Legacy Folder Migration - COMPLETED
+
+### What Was Done
+1. Created legacy directory structure:
+   - Created `services/audio/legacy/` directory
+   - Copied `services/audio/basicPitchAnalyzer.ts` → `services/audio/legacy/basicPitchAnalyzer.ts`
+   - Original file retained for reference
+
+2. Updated main export in `services/audioAnalyzer.ts`:
+   - **Before**: `export { transcribeAudioWithBasicPitch as transcribeAudio } from './audio/basicPitchAnalyzer';`
+   - **After**: `export { transcribeAudioWithMagenta as transcribeAudio } from './audio/magentaTranscriber';`
+   - Comment updated to reflect Magenta as primary transcription engine
+
+3. Verified backward compatibility:
+   - All legacy exports from `./audio` remain unchanged
+   - Export signature preserved: `transcribeAudio` function still available
+   - No breaking changes to public API
+
+### Test Results
+✅ `npm run build` → Production build successful (3.9MB bundle)
+✅ `npm run test` → 4 tests passed, 1 skipped (same as before)
+✅ No TypeScript errors or warnings
+
+### Directory Structure After Migration
+```
+services/
+  audioAnalyzer.ts  (main export - now uses Magenta)
+  audio/
+    basicPitchAnalyzer.ts  (original, retained for reference)
+    magentaTranscriber.ts  (new primary implementation)
+    modelCache.ts
+    bpmDetection.ts
+    noteConversion.ts
+    pitchDetection.ts
+    index.ts
+    legacy/
+      basicPitchAnalyzer.ts  (archived copy)
+```
+
+### Key Patterns
+- **Non-breaking migration**: Old code archived, new code active
+- **Dual availability**: Both implementations available if needed for comparison
+- **Clean export interface**: Single `transcribeAudio` export hides implementation details
+- **Backward compatibility**: All helper functions still exported from `./audio`
+
+### Migration Checklist
+- ✅ Legacy directory created
+- ✅ Basic Pitch code copied (not deleted)
+- ✅ Main export switched to Magenta
+- ✅ Build passes without errors
+- ✅ Tests pass without regressions
+- ✅ No breaking API changes
+
+### Next Steps (Future Tasks)
+- Task 0.6: Implement A/B testing UI for model selection (if needed)
+- Task 0.7: Performance benchmarking (Magenta vs Basic Pitch)
+- Task 0.8: Remove Basic Pitch dependency if Magenta proves superior
