@@ -10,7 +10,9 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@magenta/music": "^1.23.1",
     "@spotify/basic-pitch": "^1.0.1",
+    "@tensorflow/tfjs": "^4.22.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.0.0",
     "lucide-react": "^0.562.0",
