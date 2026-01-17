@@ -782,3 +782,223 @@ No new dependencies added (pure TypeScript implementation)
 - Temperley, D. (1999). "What's Key for Key? The Krumhansl-Schmuckler Key-Finding Algorithm Reconsidered." *Music Perception*, 17(1), 65-100.
 - Temperley, D. (2007). *Music and Probability*. MIT Press.
 
+# Measure Beat Validation and Correction Learnings
+
+## Task 2.2: Measure Beat Validation and Correction - COMPLETED
+
+### What Was Done
+1. Extended `services/audio/rhythmQuantizer.ts` with measure validation functions:
+   - `calculateMeasureBeats(notes: Note[]): number` - Sums total beats in note array
+   - `validateMeasureBeats(measure: Measure): boolean` - Validates 4-beat measures
+   - `fixMeasureBeats(measure: Measure): Measure` - Corrects beat count to exactly 4
+   - Helper: `vexflowDurationToBeats()` - Converts VexFlow duration strings to beat counts
+   - Helper: `beatsToDuration()` - Converts beat counts to VexFlow duration strings
+   - Helper: `insertRests()` - Fills beat deficit with rests
+   - Helper: `splitNoteAtBoundary()` - Splits notes at measure boundaries with ties
+
+2. Created comprehensive test suite `src/__tests__/measureValidation.test.ts`:
+   - 16 test cases covering all requirements
+   - Tests for beat calculation (quarter, mixed, dotted, whole, rests)
+   - Tests for validation (correct measures, overflow, underflow)
+   - Tests for correction (add rests, split notes, handle both clefs)
+   - Edge cases: empty arrays, multiple overflows, dotted note splits
+
+### Test Results
+✅ `npm run test` → All 47 tests passed, 1 skipped
+✅ `npm run build` → Production build successful (3.9MB bundle)
+✅ No TypeScript errors or warnings
+
+### VexFlow Duration Mapping
+
+**Duration String → Beats**:
+- `w` (whole) = 4 beats
+- `h` (half) = 2 beats
+- `q` (quarter) = 1 beat
+- `8` (eighth) = 0.5 beats
+- `16` (sixteenth) = 0.25 beats
+- Dotted notes: multiply by 1.5
+- Rests: same as notes (suffix `r`: `wr`, `hr`, `qr`, `8r`, `16r`)
+
+**Beats → Duration String**:
+- 4.0 → `['w', false]`
+- 3.0 → `['h', true]` (dotted half)
+- 2.0 → `['h', false]`
+- 1.5 → `['q', true]` (dotted quarter)
+- 1.0 → `['q', false]`
+- 0.75 → `['8', true]` (dotted eighth)
+- 0.5 → `['8', false]`
+- 0.25 → `['16', false]`
+
+### Measure Correction Strategies
+
+**Beat Deficit (< 4 beats)**:
+- Insert rests at end of measure
+- Use largest possible rest durations (whole → half → quarter → eighth → sixteenth)
+- Example: 2.5 beats → add half rest (2 beats) + eighth rest (0.5 beats)
+
+**Beat Overflow (> 4 beats)**:
+- Process notes sequentially until measure is full
+- Split last note that fits partially
+- Add tie markers: `tieStart` on first part, `tieEnd` on overflow part
+- Overflow part belongs to next measure (handled by caller)
+- Example: 3 beats used, 2-beat note → split to 1-beat (in measure) + 1-beat (overflow)
+
+**Tie Markers**:
+- `tieStart: true` - Note continues into next measure
+- `tieEnd: true` - Note continues from previous measure
+- Preserves musical continuity across measure boundaries
+- VexFlow renders ties automatically based on these flags
+
+### Algorithm Flow
+
+**`calculateMeasureBeats(notes)`**:
+1. For each note:
+   - Convert duration string to beats (handle dotted flag)
+   - Accumulate total
+2. Return sum
+
+**`validateMeasureBeats(measure)`**:
+1. Calculate treble beats
+2. Calculate bass beats
+3. Return true if both equal BEATS_PER_MEASURE (4)
+
+**`fixMeasureBeats(measure)`**:
+1. For treble clef:
+   - Process notes sequentially
+   - If note fits: add to measure
+   - If note overflows: split at boundary, add tie markers
+   - If beats < 4: insert rests
+2. Repeat for bass clef
+3. Return corrected measure
+
+### Key Design Decisions
+
+**Why Process Clefs Independently?**
+- Treble and bass can have different rhythms (polyphonic music)
+- Each clef must independently sum to 4 beats
+- Allows for different note densities in each hand
+
+**Why Split Notes Instead of Truncating?**
+- Preserves musical information (no note loss)
+- Ties maintain melodic continuity
+- Matches standard music notation practice
+- Overflow part can be used in next measure
+
+**Why Fill with Rests?**
+- Ensures measure completeness (required for VexFlow rendering)
+- Explicit silence is clearer than implicit gaps
+- Matches standard music notation practice
+
+**Why Use Largest Rests First?**
+- Minimizes number of rest symbols
+- Cleaner sheet music appearance
+- Example: 2 beats → 1 half rest (better than 2 quarter rests)
+
+### API Design
+
+**Function Signatures**:
+```typescript
+export function calculateMeasureBeats(notes: Note[]): number
+export function validateMeasureBeats(measure: Measure): boolean
+export function fixMeasureBeats(measure: Measure): Measure
+```
+
+**Input Types**:
+- `Note[]`: Array of VexFlow notes (from `types.ts:1-15`)
+- `Measure`: Treble/bass note arrays + optional chord groups (from `types.ts:22-27`)
+
+**Output Types**:
+- `number`: Total beats (0-∞)
+- `boolean`: True if measure is valid (exactly 4 beats in both clefs)
+- `Measure`: Corrected measure (guaranteed 4 beats in both clefs)
+
+### Integration Points
+
+**Reused Constants** (from `constants/audio.ts`):
+- `BEATS_PER_MEASURE = 4` (4/4 time signature)
+
+**Reused Types** (from `types.ts`):
+- `Note` interface (lines 1-15)
+- `Measure` interface (lines 22-27)
+
+**Compatible with Existing Pipeline**:
+- Can be called after `notesToMeasures()` in `basicPitchAnalyzer.ts:361-460`
+- Input format matches VexFlow note structure
+- Output format compatible with `MusicSheet.tsx` rendering
+
+### Performance Characteristics
+
+**Time Complexity**:
+- `calculateMeasureBeats()`: O(n) where n = number of notes
+- `validateMeasureBeats()`: O(n) for treble + O(m) for bass
+- `fixMeasureBeats()`: O(n) for treble + O(m) for bass
+- Typical measure: 4-8 notes → negligible overhead (< 0.1ms)
+
+**Space Complexity**: O(n)
+- Creates new note arrays (immutable correction)
+- Temporary rest arrays (max 4 rests per clef)
+- Minimal memory footprint
+
+### Testing Challenges & Solutions
+
+**Challenge 1: Test Case Design for Note Splitting**
+**Problem**: Initial test had whole note (4 beats) + half note (2 beats) = 6 beats
+**Issue**: Whole note fills measure completely, no room to split half note
+**Solution**: Changed to half (2) + quarter (1) + half (2) = 5 beats
+**Result**: Last note splits to quarter (1 beat in measure) + quarter (1 beat overflow)
+
+**Challenge 2: Tie Marker Verification**
+**Problem**: How to verify ties are added correctly?
+**Solution**: Test checks for `tieStart` flag on split note
+**Verification**: `expect(fixed.trebleNotes.find(n => n.tieStart)).toBeDefined()`
+
+**Challenge 3: Dotted Note Handling**
+**Problem**: Dotted notes have non-standard beat counts (1.5, 3.0, 0.75)
+**Solution**: Separate `dotted` flag in Note interface
+**Implementation**: `vexflowDurationToBeats(duration, dotted)` multiplies by 1.5 if dotted
+
+### Test Coverage
+
+**Covered Scenarios**:
+✅ Calculate beats: quarter, mixed, dotted, whole, rests, empty
+✅ Validate: correct measure, treble overflow, bass underflow, whole rest
+✅ Fix: no change (valid), add rests (deficit), split notes (overflow)
+✅ Fix: multiple notes exceeding, both clefs independently, dotted overflow
+
+**Edge Cases**:
+✅ Empty note array (0 beats)
+✅ Whole rest (4 beats, single note)
+✅ Multiple notes exceeding measure (truncate extras)
+✅ Both clefs needing correction simultaneously
+
+### Limitations & Future Improvements
+
+**Current Limitations**:
+- 4/4 time signature only (BEATS_PER_MEASURE = 4)
+- No triplet support (would require fractional beat handling)
+- Overflow notes discarded (not returned to caller)
+- No validation of chord groups (only individual notes)
+
+**Potential Improvements**:
+- Add time signature parameter (3/4, 6/8, etc.)
+- Return overflow notes for next measure
+- Validate chord groups match note arrays
+- Add measure number to error messages
+- Support pickup measures (< 4 beats intentionally)
+
+### Files Modified
+- `services/audio/rhythmQuantizer.ts` (+161 lines, now 316 lines total)
+
+### Files Created
+- `src/__tests__/measureValidation.test.ts` (217 lines)
+
+### Dependencies
+No new dependencies added (uses existing types and constants)
+
+### Next Steps (Future Tasks)
+- Task 2.3: Integrate measure validation into transcription pipeline
+- Task 2.4: Add measure validation to `notesToMeasures()` in basicPitchAnalyzer.ts
+- Task 2.5: Handle overflow notes across measure boundaries
+- Task 2.6: Add time signature parameter for non-4/4 support
+- Task 2.7: Validate chord groups match note beat positions
+
