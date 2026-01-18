@@ -1,11 +1,18 @@
 {
-  "active_plan": "C:\\Users\\Jemma\\projects\\tube2pianosheet\\.sisyphus\\plans\\improve-transcription-quality.md",
-  "started_at": "2026-01-18T04:02:30.000Z",
-  "session_ids": [
-    "ses_431087475ffeY3HFu3ilUMEQtY"
-  ],
-  "plan_name": "improve-transcription-quality",
-  "status": "in_progress",
+  "active_plan": null,
+  "started_at": null,
+  "session_ids": [],
+  "plan_name": null,
+  "status": "idle",
+  "last_completed": {
+    "plan": "improve-transcription-quality",
+    "completed_at": "2026-01-18T04:22:00.000Z",
+    "session_ids": [
+      "ses_431087475ffeY3HFu3ilUMEQtY"
+    ],
+    "commit": "1f510c0",
+    "tasks_completed": "4/6 (Tasks 1-3, 6 complete; Tasks 4-5 skipped as optional)"
+  },
   "skipped_plans": [
     {
       "plan": "implement-web-worker",
