@@ -1,11 +1,15 @@
 {
-  "active_plan": "C:\\Users\\Jemma\\projects\\tube2pianosheet\\.sisyphus\\plans\\piano-transcription-quality.md",
-  "started_at": "2026-01-17T23:07:44.527Z",
-  "completed_at": "2026-01-18T00:33:00.000Z",
-  "session_ids": ["ses_431c91415ffe83oK01o4WOgGeo"],
-  "plan_name": "piano-transcription-quality",
-  "status": "completed",
-  "tasks_completed": 16,
-  "tasks_total": 16,
-  "tasks_skipped": 1
+  "active_plan": null,
+  "started_at": null,
+  "session_ids": [],
+  "plan_name": null,
+  "status": "idle",
+  "last_completed": {
+    "plan": "fix-infinite-loading",
+    "completed_at": "2026-01-18T12:00:00.000Z",
+    "session_ids": [
+      "ses_43146adbaffeO7hwitiKVzMmRM"
+    ],
+    "commit": "44e59075f5e69f26803a518f808e37cc1f567229"
+  }
 }

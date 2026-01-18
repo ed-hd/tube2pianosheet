@@ -46,10 +46,10 @@ const FileUploader: React.FC<FileUploaderProps> = ({
     <main className="w-full max-w-2xl text-center space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="space-y-4">
         <h2 className="text-5xl md:text-6xl font-serif font-bold text-white leading-tight">
-          Turn any song into <span className="text-blue-400">Piano Sheets.</span>
+          음악을 <span className="text-blue-400">피아노 악보</span>로 변환하세요
         </h2>
         <p className="text-gray-400 text-lg max-w-lg mx-auto">
-          Upload an audio file and our local analysis engine will generate professional piano notation in seconds.
+          오디오 파일을 업로드하면 AI가 자동으로 피아노 악보를 생성합니다. 모든 분석은 브라우저에서 로컬로 처리됩니다.
         </p>
       </div>
 
@@ -68,10 +68,10 @@ const FileUploader: React.FC<FileUploaderProps> = ({
           </div>
           <div className="space-y-2">
             <p className="text-white font-semibold text-lg">
-              {dragActive ? 'Drop your audio file here' : 'Drag & drop your audio file'}
+              {dragActive ? '여기에 파일을 놓으세요' : '오디오 파일을 드래그하거나 클릭하세요'}
             </p>
             <p className="text-gray-500 text-sm">
-              or click to browse • MP3, WAV, OGG supported
+              MP3, WAV, OGG 파일 지원
             </p>
           </div>
           <input 

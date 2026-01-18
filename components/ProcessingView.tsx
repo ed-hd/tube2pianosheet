@@ -8,10 +8,10 @@ interface ProcessingViewProps {
 }
 
 const STAGE_TITLES: Record<AnalysisProgress['stage'], string> = {
-  loading: 'Loading Audio',
-  decoding: 'Decoding Audio',
-  analyzing: 'Analyzing Frequencies',
-  transcribing: 'Generating Sheet Music'
+  loading: '오디오 로딩 중',
+  decoding: '오디오 디코딩 중',
+  analyzing: '음정 분석 중',
+  transcribing: '악보 생성 중'
 };
 
 const ProcessingView: React.FC<ProcessingViewProps> = ({ fileName, progress }) => {
@@ -37,7 +37,7 @@ const ProcessingView: React.FC<ProcessingViewProps> = ({ fileName, progress }) =
           style={{ width: `${progress.progress}%` }}
         ></div>
       </div>
-      <p className="text-gray-500 text-sm">{Math.round(progress.progress)}% complete</p>
+      <p className="text-gray-500 text-sm">{Math.round(progress.progress)}% 완료</p>
     </main>
   );
 };

@@ -114,6 +114,7 @@ export async function transcribeAudio(
     artist: 'Transcribed',
     bpm,
     timeSignature: '4/4',
+    keySignature: 'C',
     measures
   };
 }

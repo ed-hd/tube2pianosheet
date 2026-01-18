@@ -13,8 +13,8 @@ const Header: React.FC = () => {
         </h1>
       </div>
       <div className="hidden md:flex gap-6 text-sm font-medium text-gray-400">
-        <a href="#" className="hover:text-white transition-colors">How it works</a>
-        <a href="#" className="hover:text-white transition-colors">Algorithms</a>
+        <a href="#" className="hover:text-white transition-colors">사용 방법</a>
+        <a href="#" className="hover:text-white transition-colors">알고리즘</a>
       </div>
     </header>
   );
