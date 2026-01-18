@@ -13,6 +13,7 @@ import {
 } from '../../constants/audio';
 import { extractChromagram } from './chromagram';
 import { detectKey } from './keyDetection';
+import { quantizeNotesViterbi, validateMeasureBeats, fixMeasureBeats } from './rhythmQuantizer';
 
 const MAGENTA_CHECKPOINT_URL = 'https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni';
 
@@ -174,46 +175,68 @@ interface QuantizedNote {
   velocity: number;
 }
 
-function quantizeNotes(notes: mm.NoteSequence.INote[], bpm: number): QuantizedNote[] {
-  const beatsPerSecond = bpm / 60;
-  const quantizedNotes: QuantizedNote[] = [];
+// Legacy quantization (preserved for reference)
+// function quantizeNotes(notes: mm.NoteSequence.INote[], bpm: number): QuantizedNote[] {
+//   const beatsPerSecond = bpm / 60;
+//   const quantizedNotes: QuantizedNote[] = [];
+//
+//   notes.forEach(note => {
+//     const startTime = note.startTime || 0;
+//     const endTime = note.endTime || 0;
+//     const duration = endTime - startTime;
+//
+//     if (duration < MIN_NOTE_DURATION_SEC) return;
+//     if (!note.pitch || note.pitch < 21 || note.pitch > 108) return;
+//
+//     const startBeat = startTime * beatsPerSecond;
+//     const durationBeats = duration * beatsPerSecond;
+//
+//     const quantizedStartBeat = Math.round(startBeat * QUANTIZATION_GRID / 4) / (QUANTIZATION_GRID / 4);
+//
+//     let quantizedDuration: number;
+//     if (durationBeats >= 5.5) quantizedDuration = 6;
+//     else if (durationBeats >= 3.5) quantizedDuration = 4;
+//     else if (durationBeats >= 2.75) quantizedDuration = 3;
+//     else if (durationBeats >= 1.5) quantizedDuration = 2;
+//     else if (durationBeats >= 1.25) quantizedDuration = 1.5;
+//     else if (durationBeats >= 0.75) quantizedDuration = 1;
+//     else if (durationBeats >= 0.625) quantizedDuration = 0.75;
+//     else if (durationBeats >= 0.375) quantizedDuration = 0.5;
+//     else quantizedDuration = 0.25;
+//
+//     const velocity = note.velocity || 64;
+//
+//     quantizedNotes.push({
+//       pitchMidi: note.pitch,
+//       startBeat: quantizedStartBeat,
+//       durationBeats: quantizedDuration,
+//       clef: midiToClef(note.pitch),
+//       velocity
+//     });
+//   });
+//
+//   return quantizedNotes;
+// }
 
-  notes.forEach(note => {
-    const startTime = note.startTime || 0;
-    const endTime = note.endTime || 0;
-    const duration = endTime - startTime;
-
-    if (duration < MIN_NOTE_DURATION_SEC) return;
-    if (!note.pitch || note.pitch < 21 || note.pitch > 108) return;
-
-    const startBeat = startTime * beatsPerSecond;
-    const durationBeats = duration * beatsPerSecond;
-
-    const quantizedStartBeat = Math.round(startBeat * QUANTIZATION_GRID / 4) / (QUANTIZATION_GRID / 4);
-
-    let quantizedDuration: number;
-    if (durationBeats >= 5.5) quantizedDuration = 6;
-    else if (durationBeats >= 3.5) quantizedDuration = 4;
-    else if (durationBeats >= 2.75) quantizedDuration = 3;
-    else if (durationBeats >= 1.5) quantizedDuration = 2;
-    else if (durationBeats >= 1.25) quantizedDuration = 1.5;
-    else if (durationBeats >= 0.75) quantizedDuration = 1;
-    else if (durationBeats >= 0.625) quantizedDuration = 0.75;
-    else if (durationBeats >= 0.375) quantizedDuration = 0.5;
-    else quantizedDuration = 0.25;
-
-    const velocity = note.velocity || 64;
-
-    quantizedNotes.push({
-      pitchMidi: note.pitch,
-      startBeat: quantizedStartBeat,
-      durationBeats: quantizedDuration,
-      clef: midiToClef(note.pitch),
-      velocity
-    });
-  });
-
-  return quantizedNotes;
+/**
+ * Converts Magenta NoteSequence notes to DetectedNote format for Viterbi quantization
+ */
+function convertToDetectedNotes(notes: mm.NoteSequence.INote[]): DetectedNote[] {
+  return notes
+    .filter(note => {
+      const duration = (note.endTime || 0) - (note.startTime || 0);
+      return duration >= MIN_NOTE_DURATION_SEC && 
+             note.pitch && 
+             note.pitch >= 21 && 
+             note.pitch <= 108;
+    })
+    .map(note => ({
+      pitch: note.pitch!,
+      frequency: 440 * Math.pow(2, (note.pitch! - 69) / 12), // MIDI to Hz
+      startTime: note.startTime || 0,
+      duration: (note.endTime || 0) - (note.startTime || 0),
+      velocity: note.velocity || 64
+    }));
 }
 
 interface ChordGroup {
@@ -346,7 +369,9 @@ function notesToMeasures(
 ): { measures: Measure[]; dynamics: DynamicMarking[] } {
   if (notes.length === 0) return { measures: [], dynamics: [] };
 
-  const quantizedNotes = quantizeNotes(notes, bpm);
+  // Convert to DetectedNote format and apply Viterbi quantization
+  const detectedNotes = convertToDetectedNotes(notes);
+  const quantizedNotes = quantizeNotesViterbi(detectedNotes, bpm);
   if (quantizedNotes.length === 0) return { measures: [], dynamics: [] };
 
   const chordGroups = groupNotesIntoChords(quantizedNotes, bpm);
@@ -470,6 +495,14 @@ export async function transcribeAudioWithMagenta(
 
   const { measures, dynamics } = notesToMeasures(notes, bpm, keySignature, BEATS_PER_MEASURE);
 
+  // Validate and fix measure beats to ensure all measures have exactly 4 beats
+  const validatedMeasures = measures.map(measure => {
+    if (!validateMeasureBeats(measure)) {
+      return fixMeasureBeats(measure);
+    }
+    return measure;
+  });
+
   const fileName = file.name.replace(/\.[^/.]+$/, '');
 
   onProgress?.(100, 'Complete!');
@@ -483,7 +516,7 @@ export async function transcribeAudioWithMagenta(
     bpm,
     timeSignature: '4/4',
     keySignature,
-    measures,
+    measures: validatedMeasures,
     dynamics
   };
 }
