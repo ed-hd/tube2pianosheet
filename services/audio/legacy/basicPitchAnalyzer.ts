@@ -91,9 +91,32 @@ function velocityToDynamic(velocity: number): 'pp' | 'p' | 'mp' | 'mf' | 'f' | '
 }
 
 function filterAndCleanNotes(notes: NoteEventTime[]): NoteEventTime[] {
+  if (notes.length === 0) return notes;
+  
+  // Calculate amplitude statistics
+  const amplitudes = notes.map(n => n.amplitude);
+  const meanAmplitude = amplitudes.reduce((sum, a) => sum + a, 0) / amplitudes.length;
+  const sortedAmplitudes = [...amplitudes].sort((a, b) => b - a);
+  const medianAmplitude = sortedAmplitudes[Math.floor(sortedAmplitudes.length / 2)];
+  
+  // Adaptive threshold: use 40% of mean amplitude, but at least 0.3
+  const MIN_AMPLITUDE = 0.3;
+  const amplitudeThreshold = Math.max(MIN_AMPLITUDE, meanAmplitude * 0.4);
+  
+  // Also consider top 60% of notes by amplitude (remove weakest 40%)
+  const percentileThreshold = sortedAmplitudes[Math.floor(sortedAmplitudes.length * 0.4)];
+  const finalThreshold = Math.max(amplitudeThreshold, percentileThreshold);
+  
   return notes.filter(note => {
+    // Filter by duration
     if (note.durationSeconds < MIN_NOTE_DURATION_SEC) return false;
+    
+    // Filter by MIDI range (piano range)
     if (note.pitchMidi < 21 || note.pitchMidi > 108) return false;
+    
+    // Filter by amplitude (remove weak/noise notes)
+    if (note.amplitude < finalThreshold) return false;
+    
     return true;
   });
 }
@@ -104,44 +127,111 @@ function estimateBPM(notes: NoteEventTime[]): number {
   const onsets = notes.map(n => n.startTimeSeconds).sort((a, b) => a - b);
   const intervals: number[] = [];
   
+  // Collect inter-onset intervals
   for (let i = 1; i < onsets.length; i++) {
     const interval = onsets[i] - onsets[i - 1];
-    if (interval > 0.05 && interval < 2.0) {
+    if (interval > 0.05 && interval < 3.0) { // Extended range for slow songs
       intervals.push(interval);
     }
   }
 
   if (intervals.length < 3) return 120;
 
-  const histogramBins: Map<number, number> = new Map();
-  const binSize = 0.02;
+  // Use autocorrelation for better tempo detection
+  const autocorr = calculateAutocorrelation(intervals);
+  const peakInterval = findDominantPeak(autocorr);
   
-  intervals.forEach(interval => {
-    const bin = Math.round(interval / binSize) * binSize;
-    histogramBins.set(bin, (histogramBins.get(bin) || 0) + 1);
-  });
-
-  let maxCount = 0;
-  let mostCommonInterval = 0.5;
+  // Calculate BPM from peak interval
+  let bpm = Math.round(60 / peakInterval);
   
-  histogramBins.forEach((count, interval) => {
-    if (count > maxCount) {
-      maxCount = count;
-      mostCommonInterval = interval;
-    }
-  });
-
-  let bpm = Math.round(60 / mostCommonInterval);
+  // Improved octave error correction using note density
+  bpm = correctTempoOctaveError(bpm, notes);
   
-  if (bpm < 50) bpm *= 2;
-  if (bpm > 200) bpm = Math.round(bpm / 2);
-  
-  const commonBPMs = [60, 66, 72, 80, 88, 92, 100, 108, 112, 120, 126, 132, 138, 144, 152, 160, 168, 176];
+  // Snap to common BPMs (removed 176, added more slow tempos)
+  const commonBPMs = [60, 63, 66, 69, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 126, 132, 138, 144, 152, 160, 168];
   bpm = commonBPMs.reduce((prev, curr) => 
     Math.abs(curr - bpm) < Math.abs(prev - bpm) ? curr : prev
   );
 
-  return Math.max(60, Math.min(180, bpm));
+  return Math.max(50, Math.min(180, bpm));
+}
+
+// Autocorrelation for tempo detection
+function calculateAutocorrelation(intervals: number[]): Map<number, number> {
+  const autocorr = new Map<number, number>();
+  const binSize = 0.05; // 50ms bins
+  
+  // Test different lag values (potential beat intervals)
+  for (let lag = 0.2; lag <= 2.5; lag += binSize) {
+    let correlation = 0;
+    let count = 0;
+    
+    for (let i = 0; i < intervals.length; i++) {
+      for (let j = i + 1; j < intervals.length; j++) {
+        const diff = Math.abs(intervals[j] - intervals[i]);
+        if (Math.abs(diff - lag) < binSize) {
+          correlation++;
+          count++;
+        }
+      }
+    }
+    
+    if (count > 0) {
+      autocorr.set(lag, correlation / count);
+    }
+  }
+  
+  return autocorr;
+}
+
+// Find dominant peak in autocorrelation
+function findDominantPeak(autocorr: Map<number, number>): number {
+  let maxCorr = 0;
+  let peakLag = 0.5;
+  
+  autocorr.forEach((corr, lag) => {
+    if (corr > maxCorr) {
+      maxCorr = corr;
+      peakLag = lag;
+    }
+  });
+  
+  return peakLag;
+}
+
+// Improved tempo octave error correction
+function correctTempoOctaveError(bpm: number, notes: NoteEventTime[]): number {
+  // Calculate note density (notes per second)
+  if (notes.length < 2) return bpm;
+  
+  const duration = notes[notes.length - 1].startTimeSeconds - notes[0].startTimeSeconds;
+  const noteDensity = notes.length / duration;
+  
+  // Expected note density for different tempo ranges
+  // Slow (60-80 BPM): ~2-4 notes/sec
+  // Medium (80-120 BPM): ~4-8 notes/sec
+  // Fast (120-180 BPM): ~8-15 notes/sec
+  
+  if (bpm > 150 && noteDensity < 6) {
+    // Too fast for the note density, likely 2x error
+    return Math.round(bpm / 2);
+  }
+  
+  if (bpm < 70 && noteDensity > 10) {
+    // Too slow for the note density, likely 0.5x error
+    return Math.round(bpm * 2);
+  }
+  
+  // Check for 4x/0.25x errors (rare but possible)
+  if (bpm > 160 && noteDensity < 4) {
+    return Math.round(bpm / 4);
+  }
+  
+  if (bpm < 60 && noteDensity > 15) {
+    return Math.round(bpm * 4);
+  }
+  
+  return bpm;
 }
 
 // Detect key signature based on note frequency

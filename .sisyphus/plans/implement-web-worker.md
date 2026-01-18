@@ -1,5 +1,16 @@
 # Web Worker 구현 계획
 
+## ⚠️ PLAN OBSOLETE - BLOCKED
+
+**Status**: BLOCKED  
+**Reason**: This plan is based on Magenta model, which we no longer use (switched to Basic Pitch)  
+**Date**: 2026-01-18  
+**Blocker Documentation**: `.sisyphus/notepads/implement-web-worker/blocker.md`
+
+**Decision**: Skip this plan and proceed to `improve-transcription-quality`
+
+---
+
 ## Context
 
 ### Problem
@@ -8,6 +19,12 @@ Magenta 모델 로딩이 메인 스레드를 블로킹하여 브라우저가 응
 
 ### Solution
 Web Worker를 사용하여 모델 로딩 및 전사 작업을 별도 스레드에서 실행.
+
+### Why Blocked
+We switched from Magenta to Basic Pitch in `fix-infinite-loading` task because:
+- Magenta model URLs return 404 Not Found
+- Models removed from Google Cloud Storage
+- Basic Pitch works without Web Worker (~45s processing time)
 
 ---
 

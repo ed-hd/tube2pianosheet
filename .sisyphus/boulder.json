@@ -1,15 +1,16 @@
 {
-  "active_plan": null,
-  "started_at": null,
-  "session_ids": [],
-  "plan_name": null,
-  "status": "idle",
-  "last_completed": {
-    "plan": "fix-infinite-loading",
-    "completed_at": "2026-01-18T12:00:00.000Z",
-    "session_ids": [
-      "ses_43146adbaffeO7hwitiKVzMmRM"
-    ],
-    "commit": "44e59075f5e69f26803a518f808e37cc1f567229"
-  }
+  "active_plan": "C:\\Users\\Jemma\\projects\\tube2pianosheet\\.sisyphus\\plans\\improve-transcription-quality.md",
+  "started_at": "2026-01-18T04:02:30.000Z",
+  "session_ids": [
+    "ses_431087475ffeY3HFu3ilUMEQtY"
+  ],
+  "plan_name": "improve-transcription-quality",
+  "status": "in_progress",
+  "skipped_plans": [
+    {
+      "plan": "implement-web-worker",
+      "reason": "Obsolete - based on Magenta model which was replaced by Basic Pitch",
+      "skipped_at": "2026-01-18T04:02:15.000Z"
+    }
+  ]
 }
