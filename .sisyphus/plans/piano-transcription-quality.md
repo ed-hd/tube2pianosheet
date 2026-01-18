@@ -293,7 +293,7 @@
 
 ---
 
-- [ ] 0.4-ALT. (실패 시) Basic Pitch 유지 + 후처리 강화
+- [N/A] 0.4-ALT. (실패 시) Basic Pitch 유지 + 후처리 강화 - **건너뜀: 0.4 Magenta 구현 성공**
 
   **What to do**:
   - 기존 Basic Pitch 코드 유지
