@@ -1746,3 +1746,86 @@ No new dependencies added (reuses voiceSeparation module from Task 3.1)
 - Task 3.1: Harmonic Analysis-Based Voice Separation (voiceSeparation.ts)
 - Task 2.1: Viterbi Rhythm Quantization (QuantizedNote type)
 - Task 1.3: Key Detection Integration (useFlats calculation)
+
+# Gemini API Code Removal Learnings
+
+## Task 4.1: Gemini API Code Removal - COMPLETED
+
+### What Was Done
+1. Searched entire codebase for Gemini API references:
+   - No `GEMINI_API_KEY` environment variable found in code
+   - No Gemini imports in any source files
+   - No Gemini-related dependencies in `package.json`
+   - No `.env.local` file in repository
+
+2. Updated `README.md`:
+   - **Before**: Step 2 instructed users to "Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key"
+   - **After**: Removed GEMINI_API_KEY setup instruction
+   - Simplified to: Install dependencies → Run the app
+
+3. Verified build success:
+   - ✅ `npm run build` → Production build successful (3.9MB bundle)
+   - ✅ No TypeScript errors or warnings
+   - ✅ No Gemini-related code found
+
+### Test Results
+✅ `npm run build` → Production build successful (3.9MB bundle)
+✅ No TypeScript errors or warnings
+✅ Codebase clean of Gemini references
+
+### Findings
+
+**Gemini API Status**:
+- No active Gemini API integration in codebase
+- README was outdated (referenced non-existent setup)
+- Project uses Magenta AI for transcription (not Gemini)
+- All audio processing is client-side (Web Audio API + TensorFlow.js)
+
+**Dependencies**:
+- `@magenta/music@1.23.1` - Primary transcription engine
+- `@tensorflow/tfjs@^4.22.0` - ML inference
+- `@spotify/basic-pitch@^1.0.1` - Legacy pitch detection (archived)
+- No Gemini SDK dependencies
+
+**Architecture**:
+- Fully offline-capable (no API calls)
+- All processing in browser
+- No server-side dependencies
+- No authentication required
+
+### Files Modified
+- `README.md` (removed GEMINI_API_KEY setup instruction)
+
+### Files NOT Modified (No Gemini Code Found)
+- `App.tsx` - Clean
+- `types.ts` - Clean
+- `package.json` - No Gemini dependencies
+- `services/audioAnalyzer.ts` - Clean
+- `services/audio/magentaTranscriber.ts` - Uses Magenta, not Gemini
+- All component files - Clean
+
+### Verification Checklist
+- ✅ No `GEMINI_API_KEY` references in codebase
+- ✅ No Gemini imports in source files
+- ✅ No Gemini dependencies in package.json
+- ✅ README updated (removed Gemini setup instruction)
+- ✅ `npm run build` succeeds
+- ✅ No TypeScript errors
+
+### Key Insights
+
+**Why Gemini Was Never Used**:
+- Project predates Gemini API integration
+- Magenta AI chosen for superior piano transcription quality
+- Magenta uses MAESTRO dataset (piano-specific training)
+- Fully offline architecture preferred (no API calls)
+
+**Documentation Debt**:
+- README contained outdated setup instructions
+- Likely copied from template or earlier project version
+- No actual Gemini code was ever implemented
+
+### Next Steps (Future Tasks)
+- None required for Gemini removal (task complete)
+- Consider updating project description if needed
+- Document architecture decision (Magenta vs other APIs)
