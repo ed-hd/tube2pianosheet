@@ -33,6 +33,10 @@ export function useAudioTranscription(): UseAudioTranscriptionResult {
     setStatus(AppState.PROCESSING);
     setProgress(INITIAL_PROGRESS);
 
+    // Force React to flush state updates before starting async operation
+    // This ensures the progress screen appears immediately
+    await new Promise(resolve => setTimeout(resolve, 0));
+
     try {
       const transcription = await transcribeAudio(file, (prog, msg) => {
         setProgress({
