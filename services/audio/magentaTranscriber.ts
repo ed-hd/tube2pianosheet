@@ -23,6 +23,40 @@ const MIN_NOTE_DURATION_SEC = 0.03;
 const QUANTIZATION_GRID = 16;
 const MAX_NOTES_PER_CHORD = 8;
 
+// Debug logging helper
+const DEBUG = true; // Set to false to disable debug logs
+function log(message: string, ...args: unknown[]): void {
+  if (DEBUG) {
+    console.log(`[MagentaTranscriber] ${message}`, ...args);
+  }
+}
+
+// Timeout helper
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    )
+  ]);
+}
+
+// WebGL support check
+function checkWebGLSupport(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+    return !!gl;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Yield to UI to prevent blocking
+async function yieldToUI(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0));
+}
+
 function midiToNoteName(midi: number, useFlats: boolean = false): string {
   const octave = Math.floor(midi / 12) - 1;
   const noteIndex = midi % 12;
@@ -493,102 +527,169 @@ export async function transcribeAudioWithMagenta(
   file: File,
   onProgress?: (progress: number, message: string) => void
 ): Promise<TranscriptionData> {
+  log('Starting transcription for file:', file.name, 'size:', file.size);
+  
   // TensorFlow.js 백엔드 설정 및 모델 초기화
   // WebGL 우선 시도, shader 컴파일 실패 시 CPU로 자동 fallback
   
   const initializeWithBackend = async (backend: 'webgl' | 'cpu'): Promise<mm.OnsetsAndFrames> => {
+    log(`Setting backend to ${backend}...`);
     await tf.setBackend(backend);
     await tf.ready();
-    console.log(`TensorFlow.js using ${backend} backend`);
+    log(`TensorFlow.js using ${backend} backend`);
     
+    log('Creating OnsetsAndFrames model...');
     const model = new mm.OnsetsAndFrames(MAGENTA_CHECKPOINT_URL);
+    log('Initializing model...');
     await model.initialize();
+    log('Model initialized successfully');
     return model;
   };
 
   onProgress?.(5, 'Initializing TensorFlow.js...');
+  await yieldToUI();
 
   let model: mm.OnsetsAndFrames;
   
   try {
-    // WebGL 백엔드로 먼저 시도
-    onProgress?.(7, 'Trying WebGL backend...');
-    model = await initializeWithBackend('webgl');
-    onProgress?.(10, 'Loading Magenta AI model (WebGL accelerated)...');
-  } catch (webglError) {
-    // WebGL 실패 시 (shader 컴파일 오류 등) CPU로 fallback
-    console.warn('WebGL backend failed, falling back to CPU:', webglError);
-    onProgress?.(7, 'WebGL failed, using CPU backend (this may be slower)...');
-    model = await initializeWithBackend('cpu');
-    onProgress?.(10, 'Loading Magenta AI model (CPU mode)...');
+    // Check WebGL support first
+    const hasWebGL = checkWebGLSupport();
+    log('WebGL support:', hasWebGL);
+    
+    if (!hasWebGL) {
+      log('WebGL not supported, using CPU backend directly');
+      onProgress?.(7, 'WebGL not available, using CPU backend...');
+      await yieldToUI();
+      model = await withTimeout(
+        initializeWithBackend('cpu'),
+        60000,
+        'Model initialization timed out after 60 seconds'
+      );
+      onProgress?.(10, 'Loading Magenta AI model (CPU mode)...');
+      await yieldToUI();
+    } else {
+      // WebGL 백엔드로 먼저 시도
+      onProgress?.(7, 'Trying WebGL backend...');
+      await yieldToUI();
+      try {
+        model = await withTimeout(
+          initializeWithBackend('webgl'),
+          60000,
+          'Model initialization timed out after 60 seconds'
+        );
+        onProgress?.(10, 'Loading Magenta AI model (WebGL accelerated)...');
+        await yieldToUI();
+      } catch (webglError) {
+        // WebGL 실패 시 (shader 컴파일 오류 등) CPU로 fallback
+        log('WebGL backend failed, falling back to CPU:', webglError);
+        onProgress?.(7, 'WebGL failed, using CPU backend (this may be slower)...');
+        await yieldToUI();
+        model = await withTimeout(
+          initializeWithBackend('cpu'),
+          60000,
+          'Model initialization timed out after 60 seconds'
+        );
+        onProgress?.(10, 'Loading Magenta AI model (CPU mode)...');
+        await yieldToUI();
+      }
+    }
+  } catch (error) {
+    log('Model initialization failed:', error);
+    throw error;
   }
 
   onProgress?.(15, 'Model loaded successfully');
+  await yieldToUI();
 
   onProgress?.(20, 'Decoding audio file...');
-  console.log('[Magenta] Starting audio file decoding...');
+  await yieldToUI();
+  log('Starting audio file decoding...');
 
   const arrayBuffer = await file.arrayBuffer();
-  console.log('[Magenta] Array buffer size:', arrayBuffer.byteLength);
+  log('Array buffer size:', arrayBuffer.byteLength);
   
   // Use default sample rate first, then resample if needed
   // Some browsers don't support 16kHz AudioContext creation
   const audioContext = new AudioContext();
-  console.log('[Magenta] AudioContext created, sample rate:', audioContext.sampleRate);
+  log('AudioContext created, sample rate:', audioContext.sampleRate);
   
   let audioBuffer: AudioBuffer;
   try {
     audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-    console.log('[Magenta] Audio decoded successfully:', audioBuffer.duration, 'seconds');
+    log('Audio decoded successfully:', audioBuffer.duration, 'seconds');
   } catch (decodeError) {
-    console.error('[Magenta] Audio decode failed:', decodeError);
+    log('Audio decode failed:', decodeError);
     throw new Error('Failed to decode audio file. Please try a different file format.');
   }
   
   // Resample to 16kHz if needed (Magenta requires 16kHz)
   if (audioBuffer.sampleRate !== 16000) {
     onProgress?.(25, 'Resampling audio to 16kHz...');
-    console.log('[Magenta] Resampling from', audioBuffer.sampleRate, 'to 16000 Hz');
+    await yieldToUI();
+    log('Resampling from', audioBuffer.sampleRate, 'to 16000 Hz');
     const offlineCtx = new OfflineAudioContext(1, Math.floor(audioBuffer.duration * 16000), 16000);
     const source = offlineCtx.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(offlineCtx.destination);
     source.start(0);
     audioBuffer = await offlineCtx.startRendering();
-    console.log('[Magenta] Resampling complete');
+    log('Resampling complete');
   }
 
   onProgress?.(30, 'Transcribing with AI model...');
+  await yieldToUI();
 
-  const noteSequence = await model.transcribeFromAudioBuffer(audioBuffer);
+  log('Starting transcription from audio buffer...');
+  const noteSequence = await withTimeout(
+    model.transcribeFromAudioBuffer(audioBuffer),
+    120000,
+    'Transcription timed out after 120 seconds'
+  );
+  log('Transcription complete, notes found:', noteSequence.notes?.length || 0);
 
   onProgress?.(70, 'Extracting notes...');
+  await yieldToUI();
 
   const notes = noteSequence.notes || [];
+  log('Extracted notes count:', notes.length);
 
   onProgress?.(80, 'Detecting tempo and key...');
+  await yieldToUI();
 
+  log('Estimating BPM...');
   const bpm = estimateBPM(notes);
+  log('Detected BPM:', bpm);
+  
+  log('Detecting key signature...');
   const keySignature = detectKeySignatureFromAudio(audioBuffer);
+  log('Detected key:', keySignature);
 
   onProgress?.(90, 'Generating sheet music...');
+  await yieldToUI();
 
+  log('Converting notes to measures...');
   const { measures, dynamics } = notesToMeasures(notes, bpm, keySignature, BEATS_PER_MEASURE);
+  log('Generated measures:', measures.length, 'dynamics:', dynamics.length);
 
   // Validate and fix measure beats to ensure all measures have exactly 4 beats
+  log('Validating measures...');
   const validatedMeasures = measures.map(measure => {
     if (!validateMeasureBeats(measure)) {
       return fixMeasureBeats(measure);
     }
     return measure;
   });
+  log('Validation complete');
 
   const fileName = file.name.replace(/\.[^/.]+$/, '');
 
   onProgress?.(100, 'Complete!');
+  await yieldToUI();
 
+  log('Cleaning up resources...');
   await audioContext.close();
   model.dispose();
+  log('Transcription complete!');
 
   return {
     title: fileName,
