@@ -12,5 +12,18 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, '.'),
     }
-  }
+  },
+  define: {
+    // Polyfill for Node.js global variable in browser
+    global: 'globalThis',
+  },
+  optimizeDeps: {
+    include: ['@magenta/music'],
+    esbuildOptions: {
+      // Define global for esbuild during dependency optimization
+      define: {
+        global: 'globalThis',
+      },
+    },
+  },
 });
