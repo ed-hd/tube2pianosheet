@@ -1,4 +1,5 @@
 import * as mm from '@magenta/music';
+import * as tf from '@tensorflow/tfjs';
 import { TranscriptionData, Measure, Note, Chord, DynamicMarking, DetectedNote } from '../../types';
 import {
   MAX_MEASURES,
@@ -492,19 +493,70 @@ export async function transcribeAudioWithMagenta(
   file: File,
   onProgress?: (progress: number, message: string) => void
 ): Promise<TranscriptionData> {
-  onProgress?.(5, 'Loading Magenta Onsets and Frames model...');
+  // TensorFlow.js 백엔드 설정 및 모델 초기화
+  // WebGL 우선 시도, shader 컴파일 실패 시 CPU로 자동 fallback
+  
+  const initializeWithBackend = async (backend: 'webgl' | 'cpu'): Promise<mm.OnsetsAndFrames> => {
+    await tf.setBackend(backend);
+    await tf.ready();
+    console.log(`TensorFlow.js using ${backend} backend`);
+    
+    const model = new mm.OnsetsAndFrames(MAGENTA_CHECKPOINT_URL);
+    await model.initialize();
+    return model;
+  };
 
-  const model = new mm.OnsetsAndFrames(MAGENTA_CHECKPOINT_URL);
+  onProgress?.(5, 'Initializing TensorFlow.js...');
 
-  onProgress?.(10, 'Initializing model...');
+  let model: mm.OnsetsAndFrames;
+  
+  try {
+    // WebGL 백엔드로 먼저 시도
+    onProgress?.(7, 'Trying WebGL backend...');
+    model = await initializeWithBackend('webgl');
+    onProgress?.(10, 'Loading Magenta AI model (WebGL accelerated)...');
+  } catch (webglError) {
+    // WebGL 실패 시 (shader 컴파일 오류 등) CPU로 fallback
+    console.warn('WebGL backend failed, falling back to CPU:', webglError);
+    onProgress?.(7, 'WebGL failed, using CPU backend (this may be slower)...');
+    model = await initializeWithBackend('cpu');
+    onProgress?.(10, 'Loading Magenta AI model (CPU mode)...');
+  }
 
-  await model.initialize();
+  onProgress?.(15, 'Model loaded successfully');
 
   onProgress?.(20, 'Decoding audio file...');
+  console.log('[Magenta] Starting audio file decoding...');
 
   const arrayBuffer = await file.arrayBuffer();
-  const audioContext = new AudioContext({ sampleRate: 16000 });
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  console.log('[Magenta] Array buffer size:', arrayBuffer.byteLength);
+  
+  // Use default sample rate first, then resample if needed
+  // Some browsers don't support 16kHz AudioContext creation
+  const audioContext = new AudioContext();
+  console.log('[Magenta] AudioContext created, sample rate:', audioContext.sampleRate);
+  
+  let audioBuffer: AudioBuffer;
+  try {
+    audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+    console.log('[Magenta] Audio decoded successfully:', audioBuffer.duration, 'seconds');
+  } catch (decodeError) {
+    console.error('[Magenta] Audio decode failed:', decodeError);
+    throw new Error('Failed to decode audio file. Please try a different file format.');
+  }
+  
+  // Resample to 16kHz if needed (Magenta requires 16kHz)
+  if (audioBuffer.sampleRate !== 16000) {
+    onProgress?.(25, 'Resampling audio to 16kHz...');
+    console.log('[Magenta] Resampling from', audioBuffer.sampleRate, 'to 16000 Hz');
+    const offlineCtx = new OfflineAudioContext(1, Math.floor(audioBuffer.duration * 16000), 16000);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineCtx.destination);
+    source.start(0);
+    audioBuffer = await offlineCtx.startRendering();
+    console.log('[Magenta] Resampling complete');
+  }
 
   onProgress?.(30, 'Transcribing with AI model...');
 
