@@ -5,7 +5,7 @@ import {
   addPitchBendsToNoteEvents,
   outputToNotesPoly,
 } from '@spotify/basic-pitch';
-import { TranscriptionData, Measure, Note, Chord, DynamicMarking } from '../../types';
+import { TranscriptionData, Measure, Note, Chord, DynamicMarking } from '../../../types';
 import { 
   MAX_MEASURES, 
   BEATS_PER_MEASURE, 
@@ -16,7 +16,7 @@ import {
   TIE_GAP_THRESHOLD,
   DYNAMICS,
   KEY_SIGNATURES
-} from '../../constants/audio';
+} from '../../../constants/audio';
 
 const MODEL_URL = 'https://unpkg.com/@spotify/basic-pitch@1.0.1/model/model.json';
 

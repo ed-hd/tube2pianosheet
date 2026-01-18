@@ -1,5 +1,5 @@
-// Use Magenta Onsets and Frames for high-quality polyphonic transcription
-export { transcribeAudioWithMagenta as transcribeAudio } from './audio/magentaTranscriber';
+// Use Basic Pitch for polyphonic transcription (Magenta models no longer available - 404)
+export { transcribeAudioWithBasicPitch as transcribeAudio } from './audio/legacy/basicPitchAnalyzer';
 
 // Legacy exports (kept for compatibility)
 export { 
