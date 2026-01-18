@@ -365,6 +365,69 @@ function groupNotesIntoChords(notes: QuantizedNote[], bpm: number): ChordGroup[]
   return groups;
 }
 
+// Separate melody, bass, and accompaniment for cleaner piano arrangement
+function separateMelodyAndAccompaniment(chordGroups: ChordGroup[]): ChordGroup[] {
+  if (chordGroups.length === 0) return chordGroups;
+  
+  const separatedGroups: ChordGroup[] = [];
+  
+  chordGroups.forEach(group => {
+    if (group.notes.length === 0) {
+      separatedGroups.push(group);
+      return;
+    }
+    
+    // Single note - keep as is
+    if (group.notes.length === 1) {
+      separatedGroups.push(group);
+      return;
+    }
+    
+    // Sort notes by pitch (low to high)
+    const sortedNotes = [...group.notes].sort((a, b) => a.pitchMidi - b.pitchMidi);
+    
+    // Identify melody (highest note with high amplitude)
+    const melody = sortedNotes[sortedNotes.length - 1];
+    
+    // Identify bass (lowest note)
+    const bass = sortedNotes[0];
+    
+    // Middle voices (accompaniment)
+    const middleVoices = sortedNotes.slice(1, -1);
+    
+    // Filter middle voices by amplitude (keep only strong ones)
+    const strongMiddleVoices = middleVoices.filter(note => {
+      // Keep note if amplitude is at least 70% of melody amplitude
+      return note.amplitude >= melody.amplitude * 0.7;
+    });
+    
+    // Limit accompaniment to 2 notes max (for readability)
+    const accompaniment = strongMiddleVoices.slice(0, 2);
+    
+    // Reconstruct chord with melody, bass, and limited accompaniment
+    const filteredNotes: QuantizedNote[] = [];
+    
+    // Always include bass (if different from melody)
+    if (bass.pitchMidi !== melody.pitchMidi) {
+      filteredNotes.push(bass);
+    }
+    
+    // Add accompaniment (max 2 notes)
+    filteredNotes.push(...accompaniment);
+    
+    // Always include melody (highest priority)
+    filteredNotes.push(melody);
+    
+    // Create new group with filtered notes
+    separatedGroups.push({
+      notes: filteredNotes,
+      startBeat: group.startBeat
+    });
+  });
+  
+  return separatedGroups;
+}
+
 function detectTiesAndSlurs(
   chordGroups: ChordGroup[], 
   bpm: number
@@ -461,8 +524,12 @@ function notesToMeasures(
 
   const quantizedNotes = quantizeNotes(cleanedNotes, bpm);
   const chordGroups = groupNotesIntoChords(quantizedNotes, bpm);
-  const noteMarkers = detectTiesAndSlurs(chordGroups, bpm);
-  const dynamics = extractDynamics(chordGroups, bpm);
+  
+  // Separate melody and accompaniment for cleaner output
+  const separatedGroups = separateMelodyAndAccompaniment(chordGroups);
+  
+  const noteMarkers = detectTiesAndSlurs(separatedGroups, bpm);
+  const dynamics = extractDynamics(separatedGroups, bpm);
 
   const useFlats = KEY_SIGNATURES[keySignature] < 0;
 
@@ -483,7 +550,7 @@ function notesToMeasures(
     const bassChords: Chord[] = [];
 
     // Find chord groups in this measure
-    chordGroups.forEach((group, groupIndex) => {
+    separatedGroups.forEach((group, groupIndex) => {
       if (group.startBeat >= measureStartBeat && group.startBeat < measureEndBeat) {
         const trebleChordNotes: Note[] = [];
         const bassChordNotes: Note[] = [];

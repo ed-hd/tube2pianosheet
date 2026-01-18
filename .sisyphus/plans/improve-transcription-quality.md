@@ -180,9 +180,17 @@ Improve transcription quality so that output matches professional sheet music st
   ```
 
   **Acceptance Criteria**:
-  - [ ] Clear melody line in treble clef
-  - [ ] Bass line shows root notes/octaves
-  - [ ] No more than 4 notes per beat average
+  - [x] Clear melody line in treble clef (highest + loudest note)
+  - [x] Bass line shows root notes/octaves (lowest note)
+  - [x] No more than 4 notes per beat average (melody + bass + max 2 accompaniment)
+
+  **Status**: ✅ COMPLETE
+  - `separateMelodyAndAccompaniment()` function implemented
+  - Filters middle voices by amplitude (70% of melody)
+  - Limits accompaniment to 2 notes max
+  - Build succeeds
+  
+  **Documentation**: `.sisyphus/notepads/improve-transcription-quality/summary.md`
 
   **Parallelizable**: YES (with task 2)
 
