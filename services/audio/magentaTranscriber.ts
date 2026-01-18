@@ -14,6 +14,7 @@ import {
 import { extractChromagram } from './chromagram';
 import { detectKey } from './keyDetection';
 import { quantizeNotesViterbi, validateMeasureBeats, fixMeasureBeats } from './rhythmQuantizer';
+import { separateVoices } from './voiceSeparation';
 
 const MAGENTA_CHECKPOINT_URL = 'https://storage.googleapis.com/magentadata/js/checkpoints/transcription/onsets_frames_uni';
 
@@ -374,11 +375,38 @@ function notesToMeasures(
   const quantizedNotes = quantizeNotesViterbi(detectedNotes, bpm);
   if (quantizedNotes.length === 0) return { measures: [], dynamics: [] };
 
+  const useFlats = KEY_SIGNATURES[keySignature] < 0;
+
+  // Apply harmonic voice separation to assign notes to treble/bass
+  const separatedVoices = separateVoices(quantizedNotes);
+  
+  // Update clef assignments based on voice separation
+  // Create a set of VexFlow note names for each voice
+  const trebleSet = new Set<string>();
+  const bassSet = new Set<string>();
+  
+  separatedVoices.treble.forEach(note => {
+    trebleSet.add(note.key);
+  });
+  
+  separatedVoices.bass.forEach(note => {
+    bassSet.add(note.key);
+  });
+  
+  // Update quantized notes with correct clef assignments based on voice separation
+  quantizedNotes.forEach(qNote => {
+    const noteName = midiToNoteName(qNote.pitchMidi, useFlats);
+    if (trebleSet.has(noteName)) {
+      qNote.clef = 'treble';
+    } else if (bassSet.has(noteName)) {
+      qNote.clef = 'bass';
+    }
+    // If not found in either set, keep the original clef assignment
+  });
+
   const chordGroups = groupNotesIntoChords(quantizedNotes, bpm);
   const noteMarkers = detectTiesAndSlurs(chordGroups, bpm);
   const dynamics = extractDynamics(chordGroups, bpm);
-
-  const useFlats = KEY_SIGNATURES[keySignature] < 0;
 
   const measures: Measure[] = [];
   const sortedNotes = [...notes].sort((a, b) => (a.startTime || 0) - (b.startTime || 0));
